@@ -1,5 +1,10 @@
 # Master gitignore file
 
+# Eclipse settings
+/.cproject
+/.project
+/.settings/
+
 # Directories with binaries
 /bin/
 /obj/
