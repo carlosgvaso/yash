@@ -1,3 +1,9 @@
+# Master gitignore file
+
+# Directories with binaries
+/bin/
+/obj/
+
 # Prerequisites
 *.d
 
