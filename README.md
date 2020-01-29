@@ -42,6 +42,6 @@ The project is written in C using the C11 standard. It has been compiled and tes
 
 * Processor: Intel Core i5-3337U CPU @ 1.80GHz × 4
 * Memory: 6GB
-* OS: Ubuntu 19.04 Desktop AMD64
+* OS: Ubuntu 19.04 Desktop x86-64
 * Compiler: GCC 8.3.0
 * Debugger: GDB 8.2.91.20190405-git
