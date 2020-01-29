@@ -40,4 +40,5 @@ $(OBJ_DIR):
 
 clean:
 	$(RM) $(OBJ)
+	rm -f core $(BIN_DIR)/$(TARGET)
 
