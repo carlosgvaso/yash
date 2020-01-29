@@ -3,7 +3,7 @@ YASH
 
 **Yet Another SHell** (YASH) is a basic Linux shell built on C with minimum library dependencies.
 
-The requirements for this sotware are outlined in the following document:
+The requirements for this software are outlined in the following document:
 
 [EE382V - Systems Programming Project 1: yet another shell (yash)](https://docs.google.com/document/d/1XVBlxWYLyrwk0E2jrCo95J3zRjEoht-KK5qnZSFFKBE/edit?usp=sharing)
 
@@ -32,5 +32,16 @@ Running
 After building the project the `yash` executable should appear inside the `/bin/` directory. To run the shell use the following command from the same directory where the executable is placed:
 
 ```console
-./yash
+$ ./yash
 ```
+
+More Information
+----------------
+
+The project is written in C using the C11 standard. It has been compiled and tested using the following environment:
+
+* Processor: Intel Core i5-3337U CPU @ 1.80GHz × 4
+* Memory: 6GB
+* OS: Ubuntu 19.04 Desktop AMD64
+* Compiler: GCC 8.3.0
+* Debugger: GDB 8.2.91.20190405-git
