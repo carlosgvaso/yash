@@ -15,7 +15,7 @@ CC := gcc
 PFLAGS := -I$(INC_DIR)
 CFLAGS := -std=c11 -Wall -Werror
 #LDFLAGS := -Llib
-#LDLIBS := -lm
+LDLIBS := -lreadline
 
 DEP := $(wildcard $(INC_DIR)/*.h)
 SRC := $(wildcard $(SRC_DIR)/*.c)
