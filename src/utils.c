@@ -13,13 +13,13 @@ const char CMD_TOKEN_DELIM = ' ';	// From requirements
 /*
  * Parse a command into strings.
  *
- * Read the man page for strtok.
+ * Make sure to free the memory for the returned tokens after using it outside this function.
  *
  * TODO: Implement.
  */
 char** parseString(char* str) {
 	int len = 0;
-	char** tokens = (char**) malloc(MAX_TOKEN_NUM * sizeof(char*));
+	char** tokens = (char**) malloc(MAX_TOKEN_NUM * sizeof(char*));	// Memory needs to be freed outside of this function
 
 
 	// Remove final newline char and replace with NULL char

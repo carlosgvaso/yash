@@ -11,18 +11,19 @@
  */
 int main(int argc, char **argv) {
 	int cpid;
-	char *inString;
-	char **parsedcmd;
+	char *in_string;
+	char **parsed_cmd;
 
-	while ((inString = readline("# "))) {
-		parsedcmd = parseString(inString);
+	while ((in_string = readline("# "))) {
+		parsed_cmd = parseString(in_string);
 		cpid = fork();
 
 		if (cpid == 0) {
-			execvp(parsedcmd[0], parsedcmd);
+			execvp(parsed_cmd[0], parsed_cmd);
 		} else {
 			wait((int *) NULL);
 		}
+		free(parsed_cmd);
 	}
 
 	return (0);
