@@ -1,29 +1,45 @@
-/*
- * Main functionality of the YASH shell.
+/**
+ * @file main.c
+ *
+ * @brief Main functionality of the YASH shell.
  *
  * @author:	Jose Carlos Martinez Garcia-Vaso <carlosgvaso@gmail.com>
  */
 
 #include <main.h>
 
-/*
- * Point of entry.
+/**
+ * @brief Point of entry.
  */
 int main(int argc, char **argv) {
 	int cpid;
-	char *in_string;
-	char **parsed_cmd;
+	char* cmd_str;
 
-	while ((in_string = readline("# "))) {
-		parsed_cmd = parseString(in_string);
+	while ((cmd_str = readline("# "))) {
+		struct Cmd cmd = {
+				"\0",		// cmd_str
+				{ "\0" },	// cmd_tok
+				0,			// cmd_tok_size
+				{ "\0" },	// cmd1
+				{ "\0" },	// cmd2
+				0,			// pipe
+				0,			// bg
+				"\0",		// in
+				"\0",		// out
+				"\0",		// err
+				"\0"		// parsing_err
+		};
+		strcpy(cmd.cmd_str, cmd_str);
+		tokenizeString(&cmd);
+		parseCmd(&cmd);
 		cpid = fork();
 
 		if (cpid == 0) {
-			execvp(parsed_cmd[0], parsed_cmd);
+			// TODO: Add support for redirection, pipes and background cmds
+			execvp(cmd.cmd1[0], cmd.cmd1);
 		} else {
 			wait((int *) NULL);
 		}
-		free(parsed_cmd);
 	}
 
 	return (0);

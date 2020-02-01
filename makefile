@@ -1,4 +1,4 @@
-# src directory makefile
+# Project makefile
 
 TARGET := yash
 
