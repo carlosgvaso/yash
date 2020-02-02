@@ -16,6 +16,7 @@ int main(int argc, char **argv) {
 	char* cmd_str;
 
 	while ((cmd_str = readline("# "))) {
+		// Initialize a new Cmd struct
 		struct Cmd cmd = {
 				"\0",		// cmd_str
 				{ "\0" },	// cmd_tok
@@ -29,9 +30,13 @@ int main(int argc, char **argv) {
 				"\0",		// err
 				"\0"		// parsing_err
 		};
-		strcpy(cmd.cmd_str, cmd_str);
-		tokenizeString(&cmd);
-		parseCmd(&cmd);
+
+		parseCmd(cmd_str, &cmd);
+
+		if (strcmp(cmd.parsing_err, "\0")) {
+			printf("-yash: %s\n", cmd.parsing_err);
+			continue;
+		}
 		cpid = fork();
 
 		if (cpid == 0) {
