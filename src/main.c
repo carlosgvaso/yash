@@ -22,12 +22,15 @@ int main(int argc, char **argv) {
 				{ "\0" },	// cmd_tok
 				0,			// cmd_tok_size
 				{ "\0" },	// cmd1
+				"\0",		// in1
+				"\0",		// out1
+				"\0",		// err1
 				{ "\0" },	// cmd2
+				"\0",		// in2
+				"\0",		// out2
+				"\0",		// err2
 				0,			// pipe
 				0,			// bg
-				"\0",		// in
-				"\0",		// out
-				"\0",		// err
 				"\0"		// parsing_err
 		};
 

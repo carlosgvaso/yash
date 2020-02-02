@@ -45,6 +45,8 @@ void tokenizeString(struct Cmd* cmd) {
  * This function takes a raw command string, and parses it to load it into a
  * `Cmd` struct as per the requirements.
  *
+ * TODO: Might need check for multiple redirections of the same type to raise an error.
+ *
  * @param	cmd_str	Raw command string
  * @param	cmd		Command struct
  *
@@ -94,7 +96,11 @@ void parseCmd(char* cmd_str, struct Cmd* cmd) {
 				break;
 			} else {	// Correct syntax
 				i++;	// Move ahead one iter to get the redir argument
-				strcpy(cmd->in, cmd->cmd_tok[i]);
+				if (!cmd->pipe) {
+					strcpy(cmd->in1, cmd->cmd_tok[i]);
+				} else {
+					strcpy(cmd->in2, cmd->cmd_tok[i]);
+				}
 			}
 		} else if (!strcmp(O_REDIR_OPT,cmd->cmd_tok[i])) {	// Output redir
 			// Check if redirection token has the correct syntax
@@ -116,7 +122,11 @@ void parseCmd(char* cmd_str, struct Cmd* cmd) {
 				break;
 			} else {	// Correct syntax
 				i++;	// Move ahead one iter to get the redir argument
-				strcpy(cmd->out, cmd->cmd_tok[i]);
+				if (!cmd->pipe) {
+					strcpy(cmd->out1, cmd->cmd_tok[i]);
+				} else {
+					strcpy(cmd->out2, cmd->cmd_tok[i]);
+				}
 			}
 		} else if (!strcmp(E_REDIR_OPT, cmd->cmd_tok[i])) {	// Error redir
 			// Check if redirection token has the correct syntax
@@ -138,7 +148,11 @@ void parseCmd(char* cmd_str, struct Cmd* cmd) {
 				break;
 			} else {	// Correct syntax
 				i++;	// Move ahead one iter to get the redir argument
-				strcpy(cmd->err, cmd->cmd_tok[i]);
+				if (!cmd->pipe) {
+					strcpy(cmd->err1, cmd->cmd_tok[i]);
+				} else {
+					strcpy(cmd->err2, cmd->cmd_tok[i]);
+				}
 			}
 		} else if (!strcmp(PIPE_OPT, cmd->cmd_tok[i])) {	// Pipe command
 			// Check if pipe token has the correct syntax
