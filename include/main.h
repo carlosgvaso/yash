@@ -10,12 +10,15 @@
 #define MAIN_H
 
 #include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <errno.h>
 #include <readline/readline.h>
 #include <readline/history.h>
-#include <unistd.h>
 #include <sys/types.h>
 #include <sys/wait.h>
-#include <stdlib.h>
+#include <sys/stat.h>
+#include <fcntl.h>
 
 #define MAX_CMD_LEN 2000	//! Max command length as per requirements
 #define MAX_TOKEN_LEN 30	//! Max token length as per requirements
@@ -34,6 +37,8 @@
  */
 #define MAX_TOKEN_NUM 1000
 #define MAX_CONCURRENT_JOBS 20	//! Max number of concurrent jobs as per requirements
+
+#define EMPTY_STR "\0"
 
 
 /**
@@ -56,13 +61,14 @@
  * If the command is to be run in the background, `bg` should be set to `1`, or
  * `0` for foreground.
  *
- * If there is an error parsing the command, `parsing_err` must be set to the
- * error message string. Else, `parsing_err` must be set to `"\0"`.
+ * If there is an error parsing or setting any part of the command, `err_msg`
+ * must be set to the error message string. Else, `err_msg` must be set to
+ * `"\0"`.
  */
 struct Cmd {
 	char cmd_str[MAX_CMD_LEN];			// Input command as a string
 	char* cmd_tok[MAX_TOKEN_NUM];		// Tokenized input command
-	int cmd_tok_size;					// Number of tokens in command
+	int cmd_tok_len;					// Number of tokens in command
 	char* cmd1[MAX_TOKEN_NUM];			// Command and arguments to execute
 	char in1[MAX_TOKEN_LEN];			// Cmd1 input redirection
 	char out1[MAX_TOKEN_LEN];			// Cmd1 output redirection
@@ -73,11 +79,12 @@ struct Cmd {
 	char err2[MAX_TOKEN_LEN];			// Cmd2 error redirection
 	int pipe;							// Pipe boolean
 	int bg;								// Background process boolean
-	char parsing_err[MAX_ERROR_LEN];	// Parsing error message
+	char err_msg[MAX_ERROR_LEN];		// Error message
 };
 
 
-void parseCmd(char* cmd_str, struct Cmd* cmd_struct);
+void parseCmd(char* cmd_str, struct Cmd* cmd);
+void redirectIO(struct Cmd* cmd);
 void tokenizeString(struct Cmd* cmd_tok);
 
 #endif
