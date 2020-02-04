@@ -54,7 +54,7 @@ uint8_t ignoreInput(char* input_str) {
  */
 void tokenizeString(struct Cmd* cmd) {
 	const char CMD_TOKEN_DELIM = ' ';	// From requirements
-	int len = 0;
+	size_t len = 0;
 
 	// Remove final newline char and replace with NULL char
 	len = strlen(cmd->cmd_str);
@@ -64,7 +64,7 @@ void tokenizeString(struct Cmd* cmd) {
 
 	// Break down the command into tokens using strtok
 	cmd->cmd_tok[0] = strtok(cmd->cmd_str, &CMD_TOKEN_DELIM);
-	int count = 1;	// Start at one because we already run strtok once
+	uint32_t count = 1;	// Start at one because we already run strtok once
 
 	while ((cmd->cmd_tok[count] = strtok(NULL, &CMD_TOKEN_DELIM))) {
 		count++;
@@ -111,7 +111,7 @@ void parseCmd(char* cmd_str, struct Cmd* cmd) {
 	 * pipes and background directives
 	 */
 	int cmd_count = 0;	// Command array counter
-	for (int i=0; i<cmd->cmd_tok_len; i++) {
+	for (uint32_t i=0; i<cmd->cmd_tok_len; i++) {
 		if (!strcmp(I_REDIR_OPT, cmd->cmd_tok[i])) {	// Check for input redir
 			// Check if redirection token has the correct syntax
 			if (i <= 0 || cmd_count <= 0) {	// Check it is not the first token
@@ -209,7 +209,7 @@ void parseCmd(char* cmd_str, struct Cmd* cmd) {
 				strcat(cmd->err_msg, cmd->cmd_tok[i]);
 				return;
 			} else {	// Correct syntax
-				cmd->pipe = 1;
+				cmd->pipe = TRUE;
 				cmd_count = 0;	// Start argument count for cmd2
 			}
 		} else if (!strcmp(BG_OPT, cmd->cmd_tok[i])) {	// Background command
@@ -218,7 +218,7 @@ void parseCmd(char* cmd_str, struct Cmd* cmd) {
 				strcpy(cmd->err_msg, SYNTAX_ERR_4);
 				return;
 			} else {
-				cmd->bg = 1;
+				cmd->bg = TRUE;
 			}
 		} else {	// Command argument
 			if (!cmd->pipe) {
@@ -251,7 +251,7 @@ void redirectSimple(struct Cmd* cmd) {
 		int i1fd = open(cmd->in1, O_RDONLY,
 						S_IRUSR|S_IWUSR|S_IRGRP|S_IWGRP|S_IROTH);
 
-		if (i1fd == -1) {
+		if (i1fd < 0) {
 			sprintf(errno_str, "%d", errno);
 			strcpy(cmd->err_msg, REDIR_ERR_1);
 			strcat(cmd->err_msg, errno_str);
@@ -270,7 +270,7 @@ void redirectSimple(struct Cmd* cmd) {
 		int o1fd = open(cmd->out1, O_WRONLY|O_CREAT|O_TRUNC,
 				S_IRUSR|S_IWUSR|S_IRGRP|S_IWGRP|S_IROTH);
 
-		if (o1fd == -1) {
+		if (o1fd < 0) {
 			sprintf(errno_str, "%d", errno);
 			strcpy(cmd->err_msg, REDIR_ERR_1);
 			strcat(cmd->err_msg, errno_str);
@@ -289,7 +289,7 @@ void redirectSimple(struct Cmd* cmd) {
 		int e1fd = open(cmd->err1, O_WRONLY|O_CREAT|O_TRUNC,
 						S_IRUSR|S_IWUSR|S_IRGRP|S_IWGRP|S_IROTH);
 
-		if (e1fd == -1) {
+		if (e1fd < 0) {
 			sprintf(errno_str, "%d", errno);
 			strcpy(cmd->err_msg, REDIR_ERR_1);
 			strcat(cmd->err_msg, errno_str);
@@ -321,7 +321,7 @@ void redirectPipe(struct Cmd* cmd) {
 		int i2fd = open(cmd->in2, O_RDONLY,
 						S_IRUSR|S_IWUSR|S_IRGRP|S_IWGRP|S_IROTH);
 
-		if (i2fd == -1) {
+		if (i2fd < 0) {
 			sprintf(errno_str, "%d", errno);
 			strcpy(cmd->err_msg, REDIR_ERR_1);
 			strcat(cmd->err_msg, errno_str);
@@ -340,7 +340,7 @@ void redirectPipe(struct Cmd* cmd) {
 		int o2fd = open(cmd->out2, O_WRONLY|O_CREAT|O_TRUNC,
 						S_IRUSR|S_IWUSR|S_IRGRP|S_IWGRP|S_IROTH);
 
-		if (o2fd == -1) {
+		if (o2fd < 0) {
 			sprintf(errno_str, "%d", errno);
 			strcpy(cmd->err_msg, REDIR_ERR_1);
 			strcat(cmd->err_msg, errno_str);
@@ -359,7 +359,7 @@ void redirectPipe(struct Cmd* cmd) {
 		int e2fd = open(cmd->err2, O_WRONLY|O_CREAT|O_TRUNC,
 						S_IRUSR|S_IWUSR|S_IRGRP|S_IWGRP|S_IROTH);
 
-		if (e2fd == -1) {
+		if (e2fd < 0) {
 			sprintf(errno_str, "%d", errno);
 			strcpy(cmd->err_msg, REDIR_ERR_1);
 			strcat(cmd->err_msg, errno_str);
@@ -378,6 +378,8 @@ void redirectPipe(struct Cmd* cmd) {
 /**
  * @brief Execute command.
  *
+ * This function is based on class examples posted on Canvas.
+ *
  * TODO: Add support for background cmds.
  * TODO: Add support for job control.
  *
@@ -394,10 +396,10 @@ void execCmd(struct Cmd* cmd) {
 
 	// Check for pipes
 	if (cmd->pipe) {
-		int stdout_fd = dup(STDOUT_FILENO);
+		int stdout_fd = dup(STDOUT_FILENO);	// Save stdout
 		int pfd[2];
 
-		if (pipe(pfd) == -1) {
+		if (pipe(pfd) < 0) {
 			sprintf(errno_str, "%d", errno);
 			strcpy(cmd->err_msg, PIPE_ERR_1);
 			strcat(cmd->err_msg, errno_str);
@@ -414,7 +416,6 @@ void execCmd(struct Cmd* cmd) {
 			redirectSimple(cmd);
 			if (strcmp(cmd->err_msg, EMPTY_STR)) {
 				dup2(stdout_fd, STDOUT_FILENO);	// Allow to write to stdout
-				close(stdout_fd);
 				printf("-yash: %s\n", cmd->err_msg);
 				exit(1);
 			}
@@ -430,7 +431,6 @@ void execCmd(struct Cmd* cmd) {
 			redirectPipe(cmd);
 			if (strcmp(cmd->err_msg, EMPTY_STR)) {
 				dup2(stdout_fd, STDOUT_FILENO);	// Allow to write to stdout
-				close(stdout_fd);
 				printf("-yash: %s\n", cmd->err_msg);
 				exit(1);
 			}
@@ -486,8 +486,8 @@ int main(int argc, char **argv) {
 				EMPTY_STR,		// in2
 				EMPTY_STR,		// out2
 				EMPTY_STR,		// err2
-				0,			// pipe
-				0,			// bg
+				FALSE,			// pipe
+				FALSE,			// bg
 				EMPTY_STR		// err_msg
 		};
 

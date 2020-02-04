@@ -40,6 +40,8 @@
 #define MAX_CONCURRENT_JOBS 20	//! Max number of concurrent jobs as per requirements
 
 #define EMPTY_STR "\0"
+#define TRUE 1
+#define FALSE 0
 
 
 /**
@@ -69,7 +71,7 @@
 struct Cmd {
 	char cmd_str[MAX_CMD_LEN];			// Input command as a string
 	char* cmd_tok[MAX_TOKEN_NUM];		// Tokenized input command
-	int cmd_tok_len;					// Number of tokens in command
+	uint32_t cmd_tok_len;				// Number of tokens in command
 	char* cmd1[MAX_TOKEN_NUM];			// Command and arguments to execute
 	char in1[MAX_TOKEN_LEN];			// Cmd1 input redirection
 	char out1[MAX_TOKEN_LEN];			// Cmd1 output redirection
@@ -78,8 +80,8 @@ struct Cmd {
 	char in2[MAX_TOKEN_LEN];			// Cmd2 input redirection
 	char out2[MAX_TOKEN_LEN];			// Cmd2 output redirection
 	char err2[MAX_TOKEN_LEN];			// Cmd2 error redirection
-	int pipe;							// Pipe boolean
-	int bg;								// Background process boolean
+	uint8_t pipe;						// Pipe boolean
+	uint8_t bg;							// Background process boolean
 	char err_msg[MAX_ERROR_LEN];		// Error message
 };
 
