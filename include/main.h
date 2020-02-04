@@ -11,6 +11,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdint.h>
 #include <unistd.h>
 #include <errno.h>
 #include <readline/readline.h>
@@ -83,9 +84,13 @@ struct Cmd {
 };
 
 
-void parseCmd(char* cmd_str, struct Cmd* cmd);
-void redirectIO(struct Cmd* cmd);
+uint8_t ignoreInput(char* input_str);
 void tokenizeString(struct Cmd* cmd_tok);
+void parseCmd(char* cmd_str, struct Cmd* cmd);
+void redirectSimple(struct Cmd* cmd);
+void redirectPipe(struct Cmd* cmd);
+void execCmd(struct Cmd* cmd);
+int main(int argc, char **argv);
 
 #endif
 
