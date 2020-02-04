@@ -465,6 +465,8 @@ void execCmd(struct Cmd* cmd) {
 /**
  * @brief Point of entry.
  *
+ * TODO: Add support for signals.
+ *
  * @param argc	Number of command line arguments
  * @param argv	Array of command line arguments
  * @return	Errorcode
@@ -472,6 +474,15 @@ void execCmd(struct Cmd* cmd) {
 int main(int argc, char **argv) {
 	char* cmd_str;
 
+	/*
+	 * Use `readline()` to control when to exit from the shell. Typing
+	 * [Ctrl]+[D] on an empty prompt line will exit as stated in the
+	 * requirements. From `readline()` documentation:
+	 *
+	 * "If readline encounters an EOF while reading the line, and the line is
+	 * empty at that point, then (char *)NULL is returned. Otherwise, the line
+	 * is ended just as if a newline had been typed."
+	 */
 	while ((cmd_str = readline("# "))) {
 		// Initialize a new Cmd struct
 		struct Cmd cmd = {
