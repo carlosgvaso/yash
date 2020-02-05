@@ -13,7 +13,7 @@ SRC_DIR := src
 # Define compiler and flags
 CC := gcc
 PFLAGS := -I$(INC_DIR)
-CFLAGS := -std=c11 -Wall -Werror
+CFLAGS := -D_POSIX_C_SOURCE -std=c11 -Wall -Werror
 #LDFLAGS := -Llib
 LDLIBS := -lreadline
 
