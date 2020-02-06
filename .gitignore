@@ -5,9 +5,8 @@
 /.project
 /.settings/
 
-# Directories with binaries
-/bin/
-/obj/
+# Executables
+/yash
 
 # Prerequisites
 *.d

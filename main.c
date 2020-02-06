@@ -481,6 +481,8 @@ static void execCmd(struct Cmd* cmd) {
 
 				// Wait for children to exit
 				while (count < CHILD_COUNT_PIPE) {
+					// TODO: Fix this
+					//if (waitpid(-1, &status, WUNTRACED|WCONTINUED) == SYSCALL_RETURN_ERR) {
 					if (waitpid(-1, &status, WUNTRACED) == SYSCALL_RETURN_ERR) {
 						sprintf(errno_str, "%d", errno);
 						strcpy(cmd->err_msg, SIG_ERR_1);
@@ -495,7 +497,7 @@ static void execCmd(struct Cmd* cmd) {
 						count++;
 					} else if (WIFSTOPPED(status)) {
 						//
-					}/* else if (WIFCONTINUED(status)) {
+					} /*else if (WIFCONTINUED(status)) {
 						//
 					}*/
 				}
@@ -548,6 +550,8 @@ static void execCmd(struct Cmd* cmd) {
 
 			// Wait for child to exit
 			while (count < CHILD_COUNT_SIMPLE) {
+				// TODO: Fix this
+				//if (waitpid(-1, &status, WUNTRACED|WCONTINUED) == SYSCALL_RETURN_ERR) {
 				if (waitpid(-1, &status, WUNTRACED) == SYSCALL_RETURN_ERR) {
 					sprintf(errno_str, "%d", errno);
 					strcpy(cmd->err_msg, SIG_ERR_1);
@@ -562,7 +566,7 @@ static void execCmd(struct Cmd* cmd) {
 					count++;
 				} else if (WIFSTOPPED(status)) {
 					//
-				}/* else if (WIFCONTINUED(status)) {
+				} /*else if (WIFCONTINUED(status)) {
 					//
 				}*/
 			}
