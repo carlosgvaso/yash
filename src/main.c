@@ -1,12 +1,15 @@
 /**
  * @file main.c
  *
- * @brief Main functionality of the YASH shell.
+ * @brief YASH shell.
  *
  * @author:	Jose Carlos Martinez Garcia-Vaso <carlosgvaso@gmail.com>
  */
 
 #include <main.h>
+
+
+pid_t pid_lead;	//! PID of the session leader child process
 
 
 /**
@@ -18,25 +21,25 @@
  * @param input_str	Inupt string to check
  * @return	1 if the input should be ignored, 0 otherwise
  */
-uint8_t ignoreInput(char* input_str) {
+static uint8_t ignoreInput(char* input_str) {
 	// Check for empty command string
 	if (!strcmp(input_str, EMPTY_STR)) {
-		return (1);
+		return (TRUE);
 	}
 
 	// Check for a command string containing only whitespace
-	uint8_t whitespace = 1;
+	uint8_t whitespace = TRUE;
 	for (size_t i=0; i<strlen(input_str); i++) {
 		if (!isspace(input_str[i])) {
-			whitespace = 0;
+			whitespace = FALSE;
 		}
 	}
 
 	if (whitespace) {
-		return (1);
+		return (TRUE);
 	}
 
-	return (0);
+	return (FALSE);
 }
 
 
@@ -52,7 +55,7 @@ uint8_t ignoreInput(char* input_str) {
  *
  * @sa strtok(), Cmd
  */
-void tokenizeString(struct Cmd* cmd) {
+static void tokenizeString(struct Cmd* cmd) {
 	const char CMD_TOKEN_DELIM = ' ';	// From requirements
 	size_t len = 0;
 
@@ -88,7 +91,7 @@ void tokenizeString(struct Cmd* cmd) {
  *
  * @sa	Cmd
  */
-void parseCmd(char* cmd_str, struct Cmd* cmd) {
+static void parseCmd(char* cmd_str, struct Cmd* cmd) {
 	const char I_REDIR_OPT[2] = "<\0";
 	const char O_REDIR_OPT[2] = ">\0";
 	const char E_REDIR_OPT[3] = "2>\0";
@@ -239,7 +242,7 @@ void parseCmd(char* cmd_str, struct Cmd* cmd) {
  *
  * @param	cmd	Command to set the redirection
  */
-void redirectSimple(struct Cmd* cmd) {
+static void redirectSimple(struct Cmd* cmd) {
 	const char REDIR_ERR_1[MAX_ERROR_LEN] = "open errno ";
 	const char REDIR_ERR_2[MAX_ERROR_LEN] = ": could not open file: ";
 	extern errno;
@@ -251,7 +254,7 @@ void redirectSimple(struct Cmd* cmd) {
 		int i1fd = open(cmd->in1, O_RDONLY,
 						S_IRUSR|S_IWUSR|S_IRGRP|S_IWGRP|S_IROTH);
 
-		if (i1fd < 0) {
+		if (i1fd == SYSCALL_RETURN_ERR) {
 			sprintf(errno_str, "%d", errno);
 			strcpy(cmd->err_msg, REDIR_ERR_1);
 			strcat(cmd->err_msg, errno_str);
@@ -270,7 +273,7 @@ void redirectSimple(struct Cmd* cmd) {
 		int o1fd = open(cmd->out1, O_WRONLY|O_CREAT|O_TRUNC,
 				S_IRUSR|S_IWUSR|S_IRGRP|S_IWGRP|S_IROTH);
 
-		if (o1fd < 0) {
+		if (o1fd == SYSCALL_RETURN_ERR) {
 			sprintf(errno_str, "%d", errno);
 			strcpy(cmd->err_msg, REDIR_ERR_1);
 			strcat(cmd->err_msg, errno_str);
@@ -289,7 +292,7 @@ void redirectSimple(struct Cmd* cmd) {
 		int e1fd = open(cmd->err1, O_WRONLY|O_CREAT|O_TRUNC,
 						S_IRUSR|S_IWUSR|S_IRGRP|S_IWGRP|S_IROTH);
 
-		if (e1fd < 0) {
+		if (e1fd == SYSCALL_RETURN_ERR) {
 			sprintf(errno_str, "%d", errno);
 			strcpy(cmd->err_msg, REDIR_ERR_1);
 			strcat(cmd->err_msg, errno_str);
@@ -309,7 +312,7 @@ void redirectSimple(struct Cmd* cmd) {
  *
  * @param	cmd	Command to set the redirection
  */
-void redirectPipe(struct Cmd* cmd) {
+static void redirectPipe(struct Cmd* cmd) {
 	const char REDIR_ERR_1[MAX_ERROR_LEN] = "open errno ";
 	const char REDIR_ERR_2[MAX_ERROR_LEN] = ": could not open file: ";
 	extern errno;
@@ -321,7 +324,7 @@ void redirectPipe(struct Cmd* cmd) {
 		int i2fd = open(cmd->in2, O_RDONLY,
 						S_IRUSR|S_IWUSR|S_IRGRP|S_IWGRP|S_IROTH);
 
-		if (i2fd < 0) {
+		if (i2fd == SYSCALL_RETURN_ERR) {
 			sprintf(errno_str, "%d", errno);
 			strcpy(cmd->err_msg, REDIR_ERR_1);
 			strcat(cmd->err_msg, errno_str);
@@ -340,7 +343,7 @@ void redirectPipe(struct Cmd* cmd) {
 		int o2fd = open(cmd->out2, O_WRONLY|O_CREAT|O_TRUNC,
 						S_IRUSR|S_IWUSR|S_IRGRP|S_IWGRP|S_IROTH);
 
-		if (o2fd < 0) {
+		if (o2fd == SYSCALL_RETURN_ERR) {
 			sprintf(errno_str, "%d", errno);
 			strcpy(cmd->err_msg, REDIR_ERR_1);
 			strcat(cmd->err_msg, errno_str);
@@ -359,7 +362,7 @@ void redirectPipe(struct Cmd* cmd) {
 		int e2fd = open(cmd->err2, O_WRONLY|O_CREAT|O_TRUNC,
 						S_IRUSR|S_IWUSR|S_IRGRP|S_IWGRP|S_IROTH);
 
-		if (e2fd < 0) {
+		if (e2fd == SYSCALL_RETURN_ERR) {
 			sprintf(errno_str, "%d", errno);
 			strcpy(cmd->err_msg, REDIR_ERR_1);
 			strcat(cmd->err_msg, errno_str);
@@ -376,30 +379,73 @@ void redirectPipe(struct Cmd* cmd) {
 
 
 /**
+ * @brief Send SIGINT to child processes.
+ *
+ * This function depends on the global variable `pid_lead`, which is the PID of
+ * the session leader child process.
+ *
+ * This function is based on the UT Austin EE 382V Systems Programming class
+ * examples posted by Dr. Ramesh Yerraballi.
+ *
+ * @param signo		Signal number
+ */
+static void sigint(int signo) {
+	// Group id is pid of first child in pipeline
+	kill(-pid_lead, SIGINT);
+}
+
+
+/**
+ * @brief Send SIGTSTP to child processes.
+ *
+ * This function depends on the global variable `pid_lead`, which is the PID of
+ * the session leader child process.
+ *
+ * This function is based on the UT Austin EE 382V Systems Programming class
+ * examples posted by Dr. Ramesh Yerraballi.
+ *
+ * @param signo		Signal number
+ */
+static void sigtstp(int signo) {
+	// Group id is pid of first child in pipeline
+	kill(-pid_lead, SIGTSTP);
+}
+
+
+/**
  * @brief Execute command.
  *
- * This function is based on class examples posted on Canvas.
+ * This function is based on the UT Austin EE 382V Systems Programming class
+ * examples posted by Dr. Ramesh Yerraballi.
  *
- * TODO: Add support for background cmds.
+ * TODO: Add support for signals (SIGINT, SIGTSTP, SIGCHLD).
  * TODO: Add support for job control.
  *
  * @param cmd	Command to set the pipe
  */
-void execCmd(struct Cmd* cmd) {
+static void execCmd(struct Cmd* cmd) {
 	const char PIPE_ERR_1[MAX_ERROR_LEN] = "pipe errno ";
 	const char PIPE_ERR_2[MAX_ERROR_LEN] = ": failed to make pipe";
+	const char SIG_ERR_1[MAX_ERROR_LEN] = "signal errno ";
+	const char SIG_ERR_2[MAX_ERROR_LEN] = ": failed to send signal SIGINT to "
+			"child process";
+	const char SIG_ERR_3[MAX_ERROR_LEN] = ": failed to send signal SIGTSTP to "
+			"child process";
+	const char SIG_ERR_4[MAX_ERROR_LEN] = ": waitpid error";
 	extern errno;
 	char errno_str[sizeof(int)*8+1];
 
+	pid_t c1_pid;
 	int status;
-	pid_t cpid;
+	uint8_t count = 0;
 
 	// Check for pipes
 	if (cmd->pipe) {
-		int stdout_fd = dup(STDOUT_FILENO);	// Save stdout
+		pid_t c2_pid;
 		int pfd[2];
+		int stdout_fd = dup(STDOUT_FILENO);	// Save stdout
 
-		if (pipe(pfd) < 0) {
+		if (pipe(pfd) == SYSCALL_RETURN_ERR) {
 			sprintf(errno_str, "%d", errno);
 			strcpy(cmd->err_msg, PIPE_ERR_1);
 			strcat(cmd->err_msg, errno_str);
@@ -407,47 +453,122 @@ void execCmd(struct Cmd* cmd) {
 			return;
 		}
 
-		cpid = fork();
+		pid_lead = c1_pid = fork();
 
-		// Left child
-		if (cpid == 0) {
+		if (c1_pid > 0) {	// Parent
+			c2_pid = fork();
+
+			if (c2_pid > 0) {	// Parent
+				if (signal(SIGINT, sigint) == SIG_ERR) {
+					sprintf(errno_str, "%d", errno);
+					strcpy(cmd->err_msg, SIG_ERR_1);
+					strcat(cmd->err_msg, errno_str);
+					strcat(cmd->err_msg, SIG_ERR_2);
+					return;
+				}
+				if (signal(SIGTSTP, sigtstp) == SIG_ERR) {
+					sprintf(errno_str, "%d", errno);
+					strcpy(cmd->err_msg, SIG_ERR_1);
+					strcat(cmd->err_msg, errno_str);
+					strcat(cmd->err_msg, SIG_ERR_3);
+					return;
+				}
+
+				// Close pipes so EOF can work
+				close(pfd[0]);
+				close(pfd[1]);
+				close(stdout_fd);
+
+				// Wait for children to exit
+				while (count < CHILD_COUNT_PIPE) {
+					if (waitpid(-1, &status, WUNTRACED) == SYSCALL_RETURN_ERR) {
+						sprintf(errno_str, "%d", errno);
+						strcpy(cmd->err_msg, SIG_ERR_1);
+						strcat(cmd->err_msg, errno_str);
+						strcat(cmd->err_msg, SIG_ERR_4);
+						return;
+					}
+
+					if (WIFEXITED(status)) {
+						count++;
+					} else if (WIFSIGNALED(status)) {
+						count++;
+					} else if (WIFSTOPPED(status)) {
+						//
+					}/* else if (WIFCONTINUED(status)) {
+						//
+					}*/
+				}
+			} else {	// Child 2 or right child
+				// Join the group created by child 1
+				setpgid(0, c1_pid);
+
+				close(pfd[1]);	// Close unused write end
+				dup2(pfd[0], STDIN_FILENO);	// Get input from pipe
+				redirectPipe(cmd);
+				if (strcmp(cmd->err_msg, EMPTY_STR)) {
+					dup2(stdout_fd, STDOUT_FILENO);	// Allow to write to stdout
+					printf("-yash: %s\n", cmd->err_msg);
+					exit(EXIT_ERR);
+				}
+				execvp(cmd->cmd2[0], cmd->cmd2);
+			}
+		} else {	// Child 1 or left child
+			// Create a new session and a new group, and become group leader
+			setsid();
+
 			close(pfd[0]);	// Close unused read end
 			dup2(pfd[1], STDOUT_FILENO);	// Make output go to pipe
 			redirectSimple(cmd);
 			if (strcmp(cmd->err_msg, EMPTY_STR)) {
 				dup2(stdout_fd, STDOUT_FILENO);	// Allow to write to stdout
 				printf("-yash: %s\n", cmd->err_msg);
-				exit(1);
+				exit(EXIT_ERR);
 			}
 			execvp(cmd->cmd1[0], cmd->cmd1);
 		}
+	} else {	// Command without pipes
+		c1_pid = fork();
 
-		cpid = fork();
-
-		// Right child
-		if (cpid == 0) {
-			close(pfd[1]);	// Close unused write end
-			dup2(pfd[0], STDIN_FILENO);	// Get input from pipe
-			redirectPipe(cmd);
-			if (strcmp(cmd->err_msg, EMPTY_STR)) {
-				dup2(stdout_fd, STDOUT_FILENO);	// Allow to write to stdout
-				printf("-yash: %s\n", cmd->err_msg);
-				exit(1);
+		if (c1_pid > 0) {	// Parent
+			if (signal(SIGINT, sigint) == SIG_ERR) {
+				sprintf(errno_str, "%d", errno);
+				strcpy(cmd->err_msg, SIG_ERR_1);
+				strcat(cmd->err_msg, errno_str);
+				strcat(cmd->err_msg, SIG_ERR_2);
+				return;
 			}
-			execvp(cmd->cmd2[0], cmd->cmd2);
-		}
-		// Close pipes so EOF can work
-		close(pfd[0]);
-		close(pfd[1]);
-		close(stdout_fd);
+			if (signal(SIGTSTP, sigtstp) == SIG_ERR) {
+				sprintf(errno_str, "%d", errno);
+				strcpy(cmd->err_msg, SIG_ERR_1);
+				strcat(cmd->err_msg, errno_str);
+				strcat(cmd->err_msg, SIG_ERR_3);
+				return;
+			}
 
-	// Parent reaps children exits
-	waitpid(-1, &status, 0);
-	waitpid(-1, &status, 0);
-	} else {
-		cpid = fork();
+			// Wait for child to exit
+			while (count < CHILD_COUNT_SIMPLE) {
+				if (waitpid(-1, &status, WUNTRACED) == SYSCALL_RETURN_ERR) {
+					sprintf(errno_str, "%d", errno);
+					strcpy(cmd->err_msg, SIG_ERR_1);
+					strcat(cmd->err_msg, errno_str);
+					strcat(cmd->err_msg, SIG_ERR_4);
+					return;
+				}
 
-		if (cpid == 0) {
+				if (WIFEXITED(status)) {
+					count++;
+				} else if (WIFSIGNALED(status)) {
+					count++;
+				} else if (WIFSTOPPED(status)) {
+					//
+				}/* else if (WIFCONTINUED(status)) {
+					//
+				}*/
+			}
+		} else {	// Child
+			// Create a new session and a new group, and become group leader
+			setsid();
 			// Redirection
 			redirectSimple(cmd);
 			if (strcmp(cmd->err_msg, EMPTY_STR)) {
@@ -456,16 +577,12 @@ void execCmd(struct Cmd* cmd) {
 
 			execvp(cmd->cmd1[0], cmd->cmd1);
 		}
-
-		waitpid(-1, &status, 0);
 	}
 }
 
 
 /**
  * @brief Point of entry.
- *
- * TODO: Add support for signals.
  *
  * @param argc	Number of command line arguments
  * @param argv	Array of command line arguments
@@ -488,7 +605,7 @@ int main(int argc, char **argv) {
 		struct Cmd cmd = {
 				EMPTY_STR,		// cmd_str
 				{ EMPTY_STR },	// cmd_tok
-				0,			// cmd_tok_size
+				0,				// cmd_tok_size
 				{ EMPTY_STR },	// cmd1
 				EMPTY_STR,		// in1
 				EMPTY_STR,		// out1
@@ -520,5 +637,10 @@ int main(int argc, char **argv) {
 		}
 	}
 
-	return (0);
+	// Ensure a new-line on exit
+	printf("\n");
+
+	// TODO: Ensure all child processes are dead on exit
+
+	return (EXIT_OK);
 }

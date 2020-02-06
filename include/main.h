@@ -20,6 +20,7 @@
 #include <sys/wait.h>
 #include <sys/stat.h>
 #include <fcntl.h>
+#include <signal.h>
 
 #define MAX_CMD_LEN 2000	//! Max command length as per requirements
 #define MAX_TOKEN_LEN 30	//! Max token length as per requirements
@@ -38,10 +39,16 @@
  */
 #define MAX_TOKEN_NUM 1000
 #define MAX_CONCURRENT_JOBS 20	//! Max number of concurrent jobs as per requirements
+#define CHILD_COUNT_SIMPLE 1	//! Number of children processes in a simple command without pipes
+#define CHILD_COUNT_PIPE 2		//! Number of children processes in a command with a pipe
+#define SYSCALL_RETURN_ERR -1	//! Value returned on a system call error
 
 #define EMPTY_STR "\0"
 #define TRUE 1
 #define FALSE 0
+
+#define EXIT_OK 0
+#define EXIT_ERR 1
 
 
 /**
@@ -86,12 +93,14 @@ struct Cmd {
 };
 
 
-uint8_t ignoreInput(char* input_str);
-void tokenizeString(struct Cmd* cmd_tok);
-void parseCmd(char* cmd_str, struct Cmd* cmd);
-void redirectSimple(struct Cmd* cmd);
-void redirectPipe(struct Cmd* cmd);
-void execCmd(struct Cmd* cmd);
+static uint8_t ignoreInput(char* input_str);
+static void tokenizeString(struct Cmd* cmd_tok);
+static void parseCmd(char* cmd_str, struct Cmd* cmd);
+static void redirectSimple(struct Cmd* cmd);
+static void redirectPipe(struct Cmd* cmd);
+static void sigint(int signo);
+static void sigtstp(int signo);
+static void execCmd(struct Cmd* cmd);
 int main(int argc, char **argv);
 
 #endif
