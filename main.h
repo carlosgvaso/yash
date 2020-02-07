@@ -13,6 +13,7 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include <unistd.h>
+#include <string.h>
 #include <errno.h>
 #include <readline/readline.h>
 #include <readline/history.h>
@@ -100,6 +101,9 @@ static void redirectSimple(struct Cmd* cmd);
 static void redirectPipe(struct Cmd* cmd);
 static void sigint(int signo);
 static void sigtstp(int signo);
+static void signalHandler(struct Cmd* cmd);
+static void execCmdSimple(struct Cmd* cmd);
+static void execCmdPipe(struct Cmd* cmd);
 static void execCmd(struct Cmd* cmd);
 int main(int argc, char **argv);
 

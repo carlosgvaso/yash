@@ -3,12 +3,12 @@
 TARGET := yash
 
 # Important directories
-BIN_DIR := bin
 CW_DIR := $(shell pwd)
-INC_DIR := include
-LIB_DIR := lib
-OBJ_DIR := obj
-SRC_DIR := src
+BIN_DIR := $(CW_DIR)
+INC_DIR := $(CW_DIR)
+LIB_DIR := $(CW_DIR)
+OBJ_DIR := $(CW_DIR)
+SRC_DIR := $(CW_DIR)
 
 # Define compiler and flags
 CC := gcc
