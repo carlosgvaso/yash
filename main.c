@@ -413,7 +413,7 @@ static void sigtstp(int signo) {
 
 
 /**
- * @brief Execute command.
+ * @brief Set up signal handling to relay signals to children processes.
  *
  * This function is based on the UT Austin EE 382V Systems Programming class
  * examples posted by Dr. Ramesh Yerraballi.
@@ -421,11 +421,9 @@ static void sigtstp(int signo) {
  * TODO: Add support for signals (SIGINT, SIGTSTP, SIGCHLD).
  * TODO: Add support for job control.
  *
- * @param cmd	Command to set the pipe
+ * @param cmd	Parsed command
  */
-static void execCmd(struct Cmd* cmd) {
-	const char PIPE_ERR_1[MAX_ERROR_LEN] = "pipe errno ";
-	const char PIPE_ERR_2[MAX_ERROR_LEN] = ": failed to make pipe";
+static void signalHandler(struct Cmd* cmd) {
 	const char SIG_ERR_1[MAX_ERROR_LEN] = "signal errno ";
 	const char SIG_ERR_2[MAX_ERROR_LEN] = ": failed to send signal SIGINT to "
 			"child process";
@@ -435,152 +433,179 @@ static void execCmd(struct Cmd* cmd) {
 	extern errno;
 	char errno_str[sizeof(int)*8+1];
 
-	pid_t c1_pid;
 	int status;
 	uint8_t count = 0;
+	int child_num;
 
-	// Check for pipes
+	// Determine the number of child processes
 	if (cmd->pipe) {
-		pid_t c2_pid;
-		int pfd[2];
-		int stdout_fd = dup(STDOUT_FILENO);	// Save stdout
+		child_num = CHILD_COUNT_PIPE;
+	} else {
+		child_num = CHILD_COUNT_SIMPLE;
+	}
 
-		if (pipe(pfd) == SYSCALL_RETURN_ERR) {
+	// Set signal handlers
+	if (signal(SIGINT, sigint) == SIG_ERR) {
+		sprintf(errno_str, "%d", errno);
+		strcpy(cmd->err_msg, SIG_ERR_1);
+		strcat(cmd->err_msg, errno_str);
+		strcat(cmd->err_msg, SIG_ERR_2);
+		return;
+	}
+	if (signal(SIGTSTP, sigtstp) == SIG_ERR) {
+		sprintf(errno_str, "%d", errno);
+		strcpy(cmd->err_msg, SIG_ERR_1);
+		strcat(cmd->err_msg, errno_str);
+		strcat(cmd->err_msg, SIG_ERR_3);
+		return;
+	}
+
+	// Wait for child to exit
+	while (count < child_num) {
+		// TODO: Fix this
+		//if (waitpid(-1, &status, WUNTRACED|WCONTINUED) == SYSCALL_RETURN_ERR) {
+		if (waitpid(-1, &status, WUNTRACED) == SYSCALL_RETURN_ERR) {
 			sprintf(errno_str, "%d", errno);
-			strcpy(cmd->err_msg, PIPE_ERR_1);
+			strcpy(cmd->err_msg, SIG_ERR_1);
 			strcat(cmd->err_msg, errno_str);
-			strcat(cmd->err_msg, PIPE_ERR_2);
+			strcat(cmd->err_msg, SIG_ERR_4);
 			return;
 		}
 
-		pid_lead = c1_pid = fork();
+		if (WIFEXITED(status)) {
+			count++;
+		} else if (WIFSIGNALED(status)) {
+			count++;
+		} else if (WIFSTOPPED(status)) {
+			//
+		} /*else if (WIFCONTINUED(status)) {
+			//
+		}*/
+	}
+}
 
-		if (c1_pid > 0) {	// Parent
-			c2_pid = fork();
 
-			if (c2_pid > 0) {	// Parent
-				if (signal(SIGINT, sigint) == SIG_ERR) {
-					sprintf(errno_str, "%d", errno);
-					strcpy(cmd->err_msg, SIG_ERR_1);
-					strcat(cmd->err_msg, errno_str);
-					strcat(cmd->err_msg, SIG_ERR_2);
-					return;
-				}
-				if (signal(SIGTSTP, sigtstp) == SIG_ERR) {
-					sprintf(errno_str, "%d", errno);
-					strcpy(cmd->err_msg, SIG_ERR_1);
-					strcat(cmd->err_msg, errno_str);
-					strcat(cmd->err_msg, SIG_ERR_3);
-					return;
-				}
+/**
+ * @brief Execute command without pipes.
+ *
+ * This function is based on the UT Austin EE 382V Systems Programming class
+ * examples posted by Dr. Ramesh Yerraballi.
+ *
+ * TODO: Add support for signals (SIGINT, SIGTSTP, SIGCHLD).
+ * TODO: Add support for job control.
+ *
+ * @param cmd	Parsed command without pipes
+ */
+static void execCmdSimple(struct Cmd* cmd) {
+	pid_t c_pid = fork();
 
-				// Close pipes so EOF can work
-				close(pfd[0]);
-				close(pfd[1]);
-				close(stdout_fd);
+	if (c_pid > 0) {	// Parent
+		// Relay signals to child
+		signalHandler(cmd);
+		if (strcmp(cmd->err_msg, EMPTY_STR)) {
+			return;
+		}
+	} else {	// Child
+		// Create a new session and a new group, and become group leader
+		setsid();
+		// Redirection
+		redirectSimple(cmd);
+		if (strcmp(cmd->err_msg, EMPTY_STR)) {
+			return;
+		}
 
-				// Wait for children to exit
-				while (count < CHILD_COUNT_PIPE) {
-					// TODO: Fix this
-					//if (waitpid(-1, &status, WUNTRACED|WCONTINUED) == SYSCALL_RETURN_ERR) {
-					if (waitpid(-1, &status, WUNTRACED) == SYSCALL_RETURN_ERR) {
-						sprintf(errno_str, "%d", errno);
-						strcpy(cmd->err_msg, SIG_ERR_1);
-						strcat(cmd->err_msg, errno_str);
-						strcat(cmd->err_msg, SIG_ERR_4);
-						return;
-					}
+		execvp(cmd->cmd1[0], cmd->cmd1);
+	}
+}
 
-					if (WIFEXITED(status)) {
-						count++;
-					} else if (WIFSIGNALED(status)) {
-						count++;
-					} else if (WIFSTOPPED(status)) {
-						//
-					} /*else if (WIFCONTINUED(status)) {
-						//
-					}*/
-				}
-			} else {	// Child 2 or right child
-				// Join the group created by child 1
-				setpgid(0, c1_pid);
 
-				close(pfd[1]);	// Close unused write end
-				dup2(pfd[0], STDIN_FILENO);	// Get input from pipe
-				redirectPipe(cmd);
-				if (strcmp(cmd->err_msg, EMPTY_STR)) {
-					dup2(stdout_fd, STDOUT_FILENO);	// Allow to write to stdout
-					printf("-yash: %s\n", cmd->err_msg);
-					exit(EXIT_ERR);
-				}
-				execvp(cmd->cmd2[0], cmd->cmd2);
+/**
+ * @brief Execute command with a pipe.
+ *
+ * This function is based on the UT Austin EE 382V Systems Programming class
+ * examples posted by Dr. Ramesh Yerraballi.
+ *
+ * TODO: Add support for signals (SIGINT, SIGTSTP, SIGCHLD).
+ * TODO: Add support for job control.
+ *
+ * @param cmd	Parsed command with a pipe
+ */
+static void execCmdPipe(struct Cmd* cmd) {
+	const char PIPE_ERR_1[MAX_ERROR_LEN] = "pipe errno ";
+	const char PIPE_ERR_2[MAX_ERROR_LEN] = ": failed to make pipe";
+	extern errno;
+	char errno_str[sizeof(int)*8+1];
+
+	pid_t c1_pid, c2_pid;
+	int pfd[2];
+	int stdout_fd = dup(STDOUT_FILENO);	// Save stdout
+
+	if (pipe(pfd) == SYSCALL_RETURN_ERR) {
+		sprintf(errno_str, "%d", errno);
+		strcpy(cmd->err_msg, PIPE_ERR_1);
+		strcat(cmd->err_msg, errno_str);
+		strcat(cmd->err_msg, PIPE_ERR_2);
+		return;
+	}
+
+	pid_lead = c1_pid = fork();
+
+	if (c1_pid > 0) {	// Parent
+		c2_pid = fork();
+
+		if (c2_pid > 0) {	// Parent
+			// Close pipes so EOF can work
+			close(pfd[0]);
+			close(pfd[1]);
+			close(stdout_fd);
+
+			// Relay signals to children
+			signalHandler(cmd);
+			if (strcmp(cmd->err_msg, EMPTY_STR)) {
+				return;
 			}
-		} else {	// Child 1 or left child
-			// Create a new session and a new group, and become group leader
-			setsid();
+		} else {	// Child 2 or right child
+			// Join the group created by child 1
+			setpgid(0, c1_pid);
 
-			close(pfd[0]);	// Close unused read end
-			dup2(pfd[1], STDOUT_FILENO);	// Make output go to pipe
-			redirectSimple(cmd);
+			close(pfd[1]);	// Close unused write end
+			dup2(pfd[0], STDIN_FILENO);	// Get input from pipe
+			redirectPipe(cmd);
 			if (strcmp(cmd->err_msg, EMPTY_STR)) {
 				dup2(stdout_fd, STDOUT_FILENO);	// Allow to write to stdout
 				printf("-yash: %s\n", cmd->err_msg);
 				exit(EXIT_ERR);
 			}
-			execvp(cmd->cmd1[0], cmd->cmd1);
+			execvp(cmd->cmd2[0], cmd->cmd2);
 		}
+	} else {	// Child 1 or left child
+		// Create a new session and a new group, and become group leader
+		setsid();
+
+		close(pfd[0]);	// Close unused read end
+		dup2(pfd[1], STDOUT_FILENO);	// Make output go to pipe
+		redirectSimple(cmd);
+		if (strcmp(cmd->err_msg, EMPTY_STR)) {
+			dup2(stdout_fd, STDOUT_FILENO);	// Allow to write to stdout
+			printf("-yash: %s\n", cmd->err_msg);
+			exit(EXIT_ERR);
+		}
+		execvp(cmd->cmd1[0], cmd->cmd1);
+	}
+}
+
+
+/**
+ * @brief Execute command.
+ *
+ * @param cmd	Parsed command to execute
+ */
+static void execCmd(struct Cmd* cmd) {
+	// Check for pipes
+	if (cmd->pipe) {
+		execCmdPipe(cmd);
 	} else {	// Command without pipes
-		c1_pid = fork();
-
-		if (c1_pid > 0) {	// Parent
-			if (signal(SIGINT, sigint) == SIG_ERR) {
-				sprintf(errno_str, "%d", errno);
-				strcpy(cmd->err_msg, SIG_ERR_1);
-				strcat(cmd->err_msg, errno_str);
-				strcat(cmd->err_msg, SIG_ERR_2);
-				return;
-			}
-			if (signal(SIGTSTP, sigtstp) == SIG_ERR) {
-				sprintf(errno_str, "%d", errno);
-				strcpy(cmd->err_msg, SIG_ERR_1);
-				strcat(cmd->err_msg, errno_str);
-				strcat(cmd->err_msg, SIG_ERR_3);
-				return;
-			}
-
-			// Wait for child to exit
-			while (count < CHILD_COUNT_SIMPLE) {
-				// TODO: Fix this
-				//if (waitpid(-1, &status, WUNTRACED|WCONTINUED) == SYSCALL_RETURN_ERR) {
-				if (waitpid(-1, &status, WUNTRACED) == SYSCALL_RETURN_ERR) {
-					sprintf(errno_str, "%d", errno);
-					strcpy(cmd->err_msg, SIG_ERR_1);
-					strcat(cmd->err_msg, errno_str);
-					strcat(cmd->err_msg, SIG_ERR_4);
-					return;
-				}
-
-				if (WIFEXITED(status)) {
-					count++;
-				} else if (WIFSIGNALED(status)) {
-					count++;
-				} else if (WIFSTOPPED(status)) {
-					//
-				} /*else if (WIFCONTINUED(status)) {
-					//
-				}*/
-			}
-		} else {	// Child
-			// Create a new session and a new group, and become group leader
-			setsid();
-			// Redirection
-			redirectSimple(cmd);
-			if (strcmp(cmd->err_msg, EMPTY_STR)) {
-				return;
-			}
-
-			execvp(cmd->cmd1[0], cmd->cmd1);
-		}
+		execCmdSimple(cmd);
 	}
 }
 
