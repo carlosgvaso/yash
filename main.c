@@ -6,11 +6,7 @@
  * @author:	Jose Carlos Martinez Garcia-Vaso <carlosgvaso@gmail.com>
  */
 
-#include <main.h>
-
-
-static uint8_t verbose;	//! Verbose output flag
-static pid_t pid_lead;	//! PID of the session leader child process
+#include "main.h"
 
 
 /**

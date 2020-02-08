@@ -53,6 +53,10 @@
 #define EXIT_ERR_ARG 2
 
 
+static uint8_t verbose;	//! Verbose output flag
+static pid_t pid_lead;	//! PID of the session leader child process
+
+
 /**
  * @brief Struct to organize the tokens of a shell command.
  *
