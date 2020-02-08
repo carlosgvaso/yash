@@ -9,7 +9,8 @@
 #include <main.h>
 
 
-pid_t pid_lead;	//! PID of the session leader child process
+static uint8_t verbose;	//! Verbose output flag
+static pid_t pid_lead;	//! PID of the session leader child process
 
 
 /**
@@ -379,36 +380,35 @@ static void redirectPipe(struct Cmd* cmd) {
 
 
 /**
- * @brief Send SIGINT to child processes.
+ * @brief Send the appropriate signal to child processes.
  *
  * This function depends on the global variable `pid_lead`, which is the PID of
  * the session leader child process.
  *
- * This function is based on the UT Austin EE 382V Systems Programming class
- * examples posted by Dr. Ramesh Yerraballi.
+ * This function is based on the Systems Programming book examples by
+ * Dr. Ramesh Yerraballi.
  *
  * @param signo		Signal number
  */
-static void sigint(int signo) {
-	// Group id is pid of first child in pipeline
-	kill(-pid_lead, SIGINT);
-}
+static void signalHandler(int signo) {
+	const char SIG_INFO_1[MAX_ERROR_LEN] = "\n-yash: Caught SIGINT\n";
+	const char SIG_INFO_2[MAX_ERROR_LEN] = "\n-yash: Caught SIGTSTP\n";
 
-
-/**
- * @brief Send SIGTSTP to child processes.
- *
- * This function depends on the global variable `pid_lead`, which is the PID of
- * the session leader child process.
- *
- * This function is based on the UT Austin EE 382V Systems Programming class
- * examples posted by Dr. Ramesh Yerraballi.
- *
- * @param signo		Signal number
- */
-static void sigtstp(int signo) {
-	// Group id is pid of first child in pipeline
-	kill(-pid_lead, SIGTSTP);
+	switch (signo) {
+	case SIGINT:
+		if (verbose) {
+			printf(SIG_INFO_1);
+		}
+		// Group id is pid of first child in pipeline
+		kill(-pid_lead, SIGINT);
+		break;
+	case SIGTSTP:
+		if (verbose) {
+			printf(SIG_INFO_2);
+		}
+		// Group id is pid of first child in pipeline
+		kill(-pid_lead, SIGTSTP);
+	}
 }
 
 
@@ -423,7 +423,7 @@ static void sigtstp(int signo) {
  *
  * @param cmd	Parsed command
  */
-static void signalHandler(struct Cmd* cmd) {
+static void setSignalHandling(struct Cmd* cmd) {
 	const char SIG_ERR_1[MAX_ERROR_LEN] = "signal errno ";
 	const char SIG_ERR_2[MAX_ERROR_LEN] = ": failed to send signal SIGINT to "
 			"child process";
@@ -445,14 +445,14 @@ static void signalHandler(struct Cmd* cmd) {
 	}
 
 	// Set signal handlers
-	if (signal(SIGINT, sigint) == SIG_ERR) {
+	if (signal(SIGINT, signalHandler) == SIG_ERR) {
 		sprintf(errno_str, "%d", errno);
 		strcpy(cmd->err_msg, SIG_ERR_1);
 		strcat(cmd->err_msg, errno_str);
 		strcat(cmd->err_msg, SIG_ERR_2);
 		return;
 	}
-	if (signal(SIGTSTP, sigtstp) == SIG_ERR) {
+	if (signal(SIGTSTP, signalHandler) == SIG_ERR) {
 		sprintf(errno_str, "%d", errno);
 		strcpy(cmd->err_msg, SIG_ERR_1);
 		strcat(cmd->err_msg, errno_str);
@@ -498,10 +498,11 @@ static void signalHandler(struct Cmd* cmd) {
  */
 static void execCmdSimple(struct Cmd* cmd) {
 	pid_t c_pid = fork();
+	pid_lead = c_pid;
 
 	if (c_pid > 0) {	// Parent
 		// Relay signals to child
-		signalHandler(cmd);
+		setSignalHandling(cmd);
 		if (strcmp(cmd->err_msg, EMPTY_STR)) {
 			return;
 		}
@@ -548,7 +549,8 @@ static void execCmdPipe(struct Cmd* cmd) {
 		return;
 	}
 
-	pid_lead = c1_pid = fork();
+	c1_pid = fork();
+	pid_lead = c1_pid;
 
 	if (c1_pid > 0) {	// Parent
 		c2_pid = fork();
@@ -560,7 +562,7 @@ static void execCmdPipe(struct Cmd* cmd) {
 			close(stdout_fd);
 
 			// Relay signals to children
-			signalHandler(cmd);
+			setSignalHandling(cmd);
 			if (strcmp(cmd->err_msg, EMPTY_STR)) {
 				return;
 			}
@@ -618,7 +620,33 @@ static void execCmd(struct Cmd* cmd) {
  * @return	Errorcode
  */
 int main(int argc, char **argv) {
+	const char USAGE[MAX_ERROR_LEN] = "\nUsage:\n"
+			"./yash [options]\n"
+			"\n"
+			"Options:\n"
+			"\t-v, --verbose\tVerbose output from shell\n";
+	const char ARG_ERROR[MAX_ERROR_LEN] = "-yash: Unknown argument: ";
+	const char V_FLAG_SHORT[3] = "-v\0";
+	const char V_FLAG_LONG[10] = "--verbose\0";
+	const char V_INFO[MAX_ERROR_LEN] = "-yash: Verbose output set\n";
 	char* cmd_str;
+
+	// Read command line arguments
+	verbose = FALSE;
+	if (argc > 1) {
+		for (int i=1; i<argc; i++){
+			if (!strcmp(V_FLAG_SHORT, argv[i])
+					|| !strcmp(V_FLAG_LONG, argv[i])) {
+				verbose = TRUE;
+				printf(V_INFO);
+			} else {
+				printf(ARG_ERROR);
+				printf("%s\n", argv[i]);
+				printf(USAGE);
+				return (EXIT_ERR_ARG);
+			}
+		}
+	}
 
 	/*
 	 * Use `readline()` to control when to exit from the shell. Typing

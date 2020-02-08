@@ -50,6 +50,7 @@
 
 #define EXIT_OK 0
 #define EXIT_ERR 1
+#define EXIT_ERR_ARG 2
 
 
 /**
@@ -99,9 +100,8 @@ static void tokenizeString(struct Cmd* cmd_tok);
 static void parseCmd(char* cmd_str, struct Cmd* cmd);
 static void redirectSimple(struct Cmd* cmd);
 static void redirectPipe(struct Cmd* cmd);
-static void sigint(int signo);
-static void sigtstp(int signo);
-static void signalHandler(struct Cmd* cmd);
+static void signalHandler(int signo);
+static void setSignalHandling(struct Cmd* cmd);
 static void execCmdSimple(struct Cmd* cmd);
 static void execCmdPipe(struct Cmd* cmd);
 static void execCmd(struct Cmd* cmd);
