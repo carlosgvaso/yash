@@ -12,8 +12,8 @@
 /**
  * @brief Check for input that should be ignored.
  *
- * This function checks for empty input strings, and strings consisting of
- * only whitespace characters.
+ * This function checks for empty input strings and strings consisting of
+ * whitespace characters only, and ignores such input.
  *
  * @param input_str	Inupt string to check
  * @return	1 if the input should be ignored, 0 otherwise
@@ -376,39 +376,6 @@ static void redirectPipe(struct Cmd* cmd) {
 
 
 /**
- * @brief Send the appropriate signal to child processes.
- *
- * This function depends on the global variable `pid_lead`, which is the PID of
- * the session leader child process.
- *
- * This function is based on the Systems Programming book examples by
- * Dr. Ramesh Yerraballi.
- *
- * @param signo		Signal number
- */
-static void signalHandler(int signo) {
-	const char SIG_INFO_1[MAX_ERROR_LEN] = "\n-yash: Caught SIGINT\n";
-	const char SIG_INFO_2[MAX_ERROR_LEN] = "\n-yash: Caught SIGTSTP\n";
-
-	switch (signo) {
-	case SIGINT:
-		if (verbose) {
-			printf(SIG_INFO_1);
-		}
-		// Group id is pid of first child in pipeline
-		kill(-pid_lead, SIGINT);
-		break;
-	case SIGTSTP:
-		if (verbose) {
-			printf(SIG_INFO_2);
-		}
-		// Group id is pid of first child in pipeline
-		kill(-pid_lead, SIGTSTP);
-	}
-}
-
-
-/**
  * @brief Set up signal handling to relay signals to children processes.
  *
  * This function is based on the UT Austin EE 382V Systems Programming class
@@ -419,13 +386,9 @@ static void signalHandler(int signo) {
  *
  * @param cmd	Parsed command
  */
-static void setSignalHandling(struct Cmd* cmd) {
+static void waitForChildren(struct Cmd* cmd) {
 	const char SIG_ERR_1[MAX_ERROR_LEN] = "signal errno ";
-	const char SIG_ERR_2[MAX_ERROR_LEN] = ": failed to send signal SIGINT to "
-			"child process";
-	const char SIG_ERR_3[MAX_ERROR_LEN] = ": failed to send signal SIGTSTP to "
-			"child process";
-	const char SIG_ERR_4[MAX_ERROR_LEN] = ": waitpid error";
+	const char SIG_ERR_2[MAX_ERROR_LEN] = ": waitpid error";
 	extern errno;
 	char errno_str[sizeof(int)*8+1];
 
@@ -440,39 +403,45 @@ static void setSignalHandling(struct Cmd* cmd) {
 		child_num = CHILD_COUNT_SIMPLE;
 	}
 
-	// Set signal handlers
-	if (signal(SIGINT, signalHandler) == SIG_ERR) {
-		sprintf(errno_str, "%d", errno);
-		strcpy(cmd->err_msg, SIG_ERR_1);
-		strcat(cmd->err_msg, errno_str);
-		strcat(cmd->err_msg, SIG_ERR_2);
-		return;
-	}
-	if (signal(SIGTSTP, signalHandler) == SIG_ERR) {
-		sprintf(errno_str, "%d", errno);
-		strcpy(cmd->err_msg, SIG_ERR_1);
-		strcat(cmd->err_msg, errno_str);
-		strcat(cmd->err_msg, SIG_ERR_3);
-		return;
-	}
-
 	// Wait for child to exit
 	while (count < child_num) {
-		// TODO: Fix this
+		/**
+		 * TODO: Fix EINTR (4) error
+		 *
+		 * This snippet always throws the EINTR (4) error code. The
+		 * documentation for waitpid (3) says EINTR means: "WNOHANG was not set
+		 * and an unblocked signal or a SIGCHLD was caught; see signal(7)."
+		 *
+		 * TODO: Fix WCONTINUED compilation error
+		 *
+		 * See this for error description: https://stackoverflow.com/questions/
+		 * 60101242/compiler-error-using-wcontinued-option-for-waitpid
+		 */
 		//if (waitpid(-1, &status, WUNTRACED|WCONTINUED) == SYSCALL_RETURN_ERR) {
 		if (waitpid(-1, &status, WUNTRACED) == SYSCALL_RETURN_ERR) {
 			sprintf(errno_str, "%d", errno);
 			strcpy(cmd->err_msg, SIG_ERR_1);
 			strcat(cmd->err_msg, errno_str);
-			strcat(cmd->err_msg, SIG_ERR_4);
+			strcat(cmd->err_msg, SIG_ERR_2);
 			return;
 		}
 
 		if (WIFEXITED(status)) {
+			if (verbose) {
+				printf("-yash: child process terminated normally\n");
+			}
 			count++;
 		} else if (WIFSIGNALED(status)) {
+			printf("\n");	// Ensure there is an space after "^C"
+			if (verbose) {
+				printf("-yash: child process terminated by a signal\n");
+			}
 			count++;
 		} else if (WIFSTOPPED(status)) {
+			printf("\n");	// Ensure there is an space after "^Z"
+			if (verbose) {
+				printf("-yash: child process stopped by a signal\n");
+			}
 			//
 		} /*else if (WIFCONTINUED(status)) {
 			//
@@ -482,52 +451,20 @@ static void setSignalHandling(struct Cmd* cmd) {
 
 
 /**
- * @brief Execute command without pipes.
+ * @brief Execute commands.
+ *
+ * This function allows for both simple and piped commands (1 pipe only).
+ * Moreover, the command is checked for correctness, and ignored if it does not
+ * exist.
  *
  * This function is based on the UT Austin EE 382V Systems Programming class
- * examples posted by Dr. Ramesh Yerraballi.
+ * examples by Dr. Ramesh Yerraballi.
  *
- * TODO: Add support for signals (SIGINT, SIGTSTP, SIGCHLD).
  * TODO: Add support for job control.
  *
- * @param cmd	Parsed command without pipes
+ * @param cmd	Parsed command
  */
-static void execCmdSimple(struct Cmd* cmd) {
-	pid_t c_pid = fork();
-	pid_lead = c_pid;
-
-	if (c_pid > 0) {	// Parent
-		// Relay signals to child
-		setSignalHandling(cmd);
-		if (strcmp(cmd->err_msg, EMPTY_STR)) {
-			return;
-		}
-	} else {	// Child
-		// Create a new session and a new group, and become group leader
-		setsid();
-		// Redirection
-		redirectSimple(cmd);
-		if (strcmp(cmd->err_msg, EMPTY_STR)) {
-			return;
-		}
-
-		execvp(cmd->cmd1[0], cmd->cmd1);
-	}
-}
-
-
-/**
- * @brief Execute command with a pipe.
- *
- * This function is based on the UT Austin EE 382V Systems Programming class
- * examples posted by Dr. Ramesh Yerraballi.
- *
- * TODO: Add support for signals (SIGINT, SIGTSTP, SIGCHLD).
- * TODO: Add support for job control.
- *
- * @param cmd	Parsed command with a pipe
- */
-static void execCmdPipe(struct Cmd* cmd) {
+static void execCmd(struct Cmd* cmd) {
 	const char PIPE_ERR_1[MAX_ERROR_LEN] = "pipe errno ";
 	const char PIPE_ERR_2[MAX_ERROR_LEN] = ": failed to make pipe";
 	extern errno;
@@ -535,75 +472,112 @@ static void execCmdPipe(struct Cmd* cmd) {
 
 	pid_t c1_pid, c2_pid;
 	int pfd[2];
-	int stdout_fd = dup(STDOUT_FILENO);	// Save stdout
+	int stdout_fd;
 
-	if (pipe(pfd) == SYSCALL_RETURN_ERR) {
-		sprintf(errno_str, "%d", errno);
-		strcpy(cmd->err_msg, PIPE_ERR_1);
-		strcat(cmd->err_msg, errno_str);
-		strcat(cmd->err_msg, PIPE_ERR_2);
-		return;
+	if (cmd->pipe) {
+		stdout_fd = dup(STDOUT_FILENO);	// Save stdout
+
+		if (pipe(pfd) == SYSCALL_RETURN_ERR) {
+			sprintf(errno_str, "%d", errno);
+			strcpy(cmd->err_msg, PIPE_ERR_1);
+			strcat(cmd->err_msg, errno_str);
+			strcat(cmd->err_msg, PIPE_ERR_2);
+			return;
+		}
 	}
 
 	c1_pid = fork();
-	pid_lead = c1_pid;
 
-	if (c1_pid > 0) {	// Parent
-		c2_pid = fork();
+	if (c1_pid == 0) {	// Child 1 or left child process
+		// Ignore signals sent to the children process group
+		if (verbose) {
+			printf("-yash: children process group: ignoring signal SIGTTOU\n");
+		}
+		signal(SIGTTOU, SIG_IGN);
 
-		if (c2_pid > 0) {	// Parent
-			// Close pipes so EOF can work
+		// Create a new session and a new group, and become group leader
+		setpgid(0, 0);
+
+		if (cmd->pipe) {
+			close(pfd[0]);	// Close unused read end
+			dup2(pfd[1], STDOUT_FILENO);	// Make output go to pipe
+		}
+		// Do additional redirection if necessary
+		redirectSimple(cmd);
+		if (strcmp(cmd->err_msg, EMPTY_STR)) {
+			if (cmd->pipe) {
+				dup2(stdout_fd, STDOUT_FILENO);	// Allow to write to stdout
+			}
+			printf("-yash: %s\n", cmd->err_msg);
+			exit(EXIT_ERR_CMD);
+		}
+
+		// Execute command
+		if (execvp(cmd->cmd1[0], cmd->cmd1) == -1 && verbose) {
+			printf("-yash: execvp() errno: %d\n", errno);
+		}
+		// Make sure we terminate child on execvp() error
+		exit(EXIT_ERR_CMD);
+	} else {	// Parent process
+		if (cmd->pipe) {
+			c2_pid = fork();
+
+			if (c2_pid == 0) {	// Child 2 or right child process
+				// Join the group created by child 1
+				setpgid(0, c1_pid);
+
+				close(pfd[1]);	// Close unused write end
+				dup2(pfd[0], STDIN_FILENO);	// Get input from pipe
+
+				// Do additional redirection if necessary
+				redirectPipe(cmd);
+				if (strcmp(cmd->err_msg, EMPTY_STR)) {
+					dup2(stdout_fd, STDOUT_FILENO);	// Allow to write to stdout
+					printf("-yash: %s\n", cmd->err_msg);
+					exit(EXIT_ERR_CMD);
+				}
+
+				// Execute command
+				if (execvp(cmd->cmd2[0], cmd->cmd2) == -1 && verbose) {
+					printf("-yash: execvp() errno: %d\n", errno);
+				}
+				// Make sure we terminate child on execvp() error
+				exit(EXIT_ERR_CMD);
+			}
+			// Parent process. Close pipes so EOF can work
 			close(pfd[0]);
 			close(pfd[1]);
 			close(stdout_fd);
+		}
 
-			// Relay signals to children
-			setSignalHandling(cmd);
+		// Parent process
+		if (!cmd->bg) {
+			// Ignore signals sent to the shell (parent process)
+			if (verbose) {
+				printf("-yash: parent: ignoring signals SIGINT, SIGTSTP and SIGTTOU\n");
+			}
+			signal(SIGINT, SIG_IGN);
+			signal(SIGTSTP, SIG_IGN);
+			signal(SIGTTOU, SIG_IGN);
+
+			// Give terminal control to child
+			if (verbose) {
+				printf("-yash: giving terminal control to child process group\n");
+			}
+			tcsetpgrp(0, c1_pid);
+
+			// Block while waiting for children
+			waitForChildren(cmd);
 			if (strcmp(cmd->err_msg, EMPTY_STR)) {
 				return;
 			}
-		} else {	// Child 2 or right child
-			// Join the group created by child 1
-			setpgid(0, c1_pid);
 
-			close(pfd[1]);	// Close unused write end
-			dup2(pfd[0], STDIN_FILENO);	// Get input from pipe
-			redirectPipe(cmd);
-			if (strcmp(cmd->err_msg, EMPTY_STR)) {
-				dup2(stdout_fd, STDOUT_FILENO);	// Allow to write to stdout
-				printf("-yash: %s\n", cmd->err_msg);
-				exit(EXIT_ERR);
+			// Get back terminal control to parent
+			if (verbose) {
+				printf("-yash: returning terminal control to parent process\n");
 			}
-			execvp(cmd->cmd2[0], cmd->cmd2);
+			tcsetpgrp(0, getpid());
 		}
-	} else {	// Child 1 or left child
-		// Create a new session and a new group, and become group leader
-		setsid();
-
-		close(pfd[0]);	// Close unused read end
-		dup2(pfd[1], STDOUT_FILENO);	// Make output go to pipe
-		redirectSimple(cmd);
-		if (strcmp(cmd->err_msg, EMPTY_STR)) {
-			dup2(stdout_fd, STDOUT_FILENO);	// Allow to write to stdout
-			printf("-yash: %s\n", cmd->err_msg);
-			exit(EXIT_ERR);
-		}
-		execvp(cmd->cmd1[0], cmd->cmd1);
-	}
-}
-
-
-/**
- * @brief Execute command.
- *
- * @param cmd	Parsed command to execute
- */
-static void execCmd(struct Cmd* cmd) {
-	// Check for pipes
-	if (cmd->pipe) {
-		execCmdPipe(cmd);
-	} else {	// Command without pipes
-		execCmdSimple(cmd);
 	}
 }
 
@@ -621,10 +595,10 @@ int main(int argc, char **argv) {
 			"\n"
 			"Options:\n"
 			"\t-v, --verbose\tVerbose output from shell\n";
-	const char ARG_ERROR[MAX_ERROR_LEN] = "-yash: Unknown argument: ";
+	const char ARG_ERROR[MAX_ERROR_LEN] = "-yash: unknown argument: ";
 	const char V_FLAG_SHORT[3] = "-v\0";
 	const char V_FLAG_LONG[10] = "--verbose\0";
-	const char V_INFO[MAX_ERROR_LEN] = "-yash: Verbose output set\n";
+	const char V_INFO[MAX_ERROR_LEN] = "-yash: verbose output set\n";
 	char* cmd_str;
 
 	// Read command line arguments
@@ -673,16 +647,28 @@ int main(int argc, char **argv) {
 		};
 
 		// Check input to ignore and show the prompt again
+		if (verbose) {
+			printf("-yash: checking if input should be ignored...\n");
+		}
 		if (ignoreInput(cmd_str)) {
+			if (verbose) {
+				printf("-yash: input ignored\n");
+			}
 			continue;
 		}
 
+		if (verbose) {
+			printf("-yash: parsing input...\n");
+		}
 		parseCmd(cmd_str, &cmd);
 		if (strcmp(cmd.err_msg, EMPTY_STR)) {
 			printf("-yash: %s\n", cmd.err_msg);
 			continue;
 		}
 
+		if (verbose) {
+			printf("-yash: executing command...\n");
+		}
 		execCmd(&cmd);
 		if (strcmp(cmd.err_msg, EMPTY_STR)) {
 			printf("-yash: %s\n", cmd.err_msg);
@@ -692,6 +678,9 @@ int main(int argc, char **argv) {
 
 	// Ensure a new-line on exit
 	printf("\n");
+	if (verbose) {
+		printf("-yash: exiting...\n");
+	}
 
 	// TODO: Ensure all child processes are dead on exit
 
