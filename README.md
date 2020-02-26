@@ -46,3 +46,18 @@ The project is written in C using the C11 standard. It has been compiled and tes
 * Linux Kernel: 5.0.038-generic
 * Compiler: GCC 8.3.0
 * Debugger: GDB 8.2.91.20190405-git
+
+
+TODO
+----
+
+1. Write 2 test programs (1 outputs stuff other takes in stuff) instead of using
+utilities like `sleep` to test the shell.
+
+2. First do redirection, and then pipe the output if there is a pipe. I believe
+this means that if there is output redirection in the lhs, the output goes both
+to the output file and the pipe. This is not the same behavior of Bash. In Bash,
+the output will only go to the lhs redirection file, and it will not go into the
+rhs of the pipe.
+
+3. Use `_exit()` instead of `exit()` to get out of child processes ([explanation here](https://stackoverflow.com/questions/5422831/what-is-the-difference-between-using-exit-exit-in-a-conventional-linux-fo)).
